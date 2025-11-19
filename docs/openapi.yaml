@@ -1,1 +1,654 @@
+openapi: 3.0.3
+info:
+  title: Product Service API
+  description: |
+    Микросервис для управления товарами с асинхронной обработкой через Kafka.
+    
+    ## Особенности
+    - Асинхронная обработка операций через Kafka
+    - Кеширование данных в Redis
+    - Валидация специфических атрибутов для разных типов товаров
+    - Rate limiting (10 запросов в секунду)
+    
+    ## Поток данных
+    ```
+    Client → API → Kafka → Processor → PostgreSQL
+    ```
+    
+    Все операции создания, обновления и удаления принимаются в обработку (202 Accepted) и выполняются асинхронно.
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
 
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Development server
+
+tags:
+  - name: Products
+    description: Операции с товарами
+  - name: Health
+    description: Проверка состояния сервиса
+
+paths:
+  /products:
+    get:
+      tags:
+        - Products
+      summary: Получить список товаров
+      description: |
+        Возвращает список товаров с поддержкой фильтрации, пагинации и сортировки.
+        
+        ### Фильтрация
+        - По типу товара (можно указать несколько типов)
+        - По цене (диапазон)
+        - По цвету
+      parameters:
+        - name: limit
+          in: query
+          description: Количество товаров на странице (максимум 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: offset
+          in: query
+          description: Смещение для пагинации
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: min_price
+          in: query
+          description: Минимальная цена товара
+          schema:
+            type: number
+            minimum: 0
+        - name: max_price
+          in: query
+          description: Максимальная цена товара
+          schema:
+            type: number
+            minimum: 0
+        - name: color
+          in: query
+          description: Цвет товара
+          schema:
+            type: string
+        - name: type
+          in: query
+          description: Тип товара (можно указать несколько)
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - clothing_headwear
+                - clothing_body
+                - clothing_pants
+                - clothing_shoes
+                - food
+                - furniture
+                - electronics
+                - adult
+                - home_goods
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListProductsResponse'
+        '400':
+          description: Неверные параметры запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags:
+        - Products
+      summary: Создать новый товар
+      description: |
+        Создает новый товар. Операция принимается в обработку и выполняется асинхронно через Kafka.
+        
+        ### Специфические атрибуты по типам:
+        
+        **Одежда (головные уборы):**
+        - `head_circumference` (обязательно) - обхват головы в см
+        
+        **Одежда (верхняя):**
+        - `chest_circumference` (обязательно) - обхват груди в см
+        
+        **Одежда (штаны):**
+        - `waist_circumference` (обязательно) - обхват талии в см
+        
+        **Одежда (обувь):**
+        - `foot_size` (обязательно) - размер ноги в см
+        
+        **Электроника:**
+        - `warranty_months` (обязательно) - гарантия в месяцах
+        
+        **Еда:**
+        - `expiry_date` (обязательно) - срок годности
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductRequest'
+      responses:
+        '202':
+          description: Запрос принят в обработку
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateProductResponse'
+        '400':
+          description: Ошибка валидации данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Превышен лимит запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /products/{id}:
+    get:
+      tags:
+        - Products
+      summary: Получить товар по ID
+      description: Возвращает информацию о конкретном товаре. Данные кешируются в Redis.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID товара
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '404':
+          description: Товар не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags:
+        - Products
+      summary: Обновить товар
+      description: Обновляет информацию о товаре. Операция выполняется асинхронно через Kafka.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID товара
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProductRequest'
+      responses:
+        '202':
+          description: Запрос принят в обработку
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateProductResponse'
+        '400':
+          description: Ошибка валидации данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Товар не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Превышен лимит запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags:
+        - Products
+      summary: Удалить товар
+      description: Удаляет товар. Операция выполняется асинхронно через Kafka.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID товара
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '202':
+          description: Запрос принят в обработку
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteProductResponse'
+        '404':
+          description: Товар не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Превышен лимит запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Проверка здоровья сервиса
+      description: Проверяет доступность сервиса и его зависимостей (PostgreSQL, Redis, Kafka)
+      responses:
+        '200':
+          description: Сервис здоров
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Сервис недоступен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /health/ready:
+    get:
+      tags:
+        - Health
+      summary: Проверка готовности сервиса
+      description: Проверяет готовность сервиса к обработке запросов
+      responses:
+        '200':
+          description: Сервис готов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Сервис не готов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+components:
+  schemas:
+    # Request Schemas
+    CreateProductRequest:
+      type: object
+      required:
+        - name
+        - weight
+        - unit
+        - type
+        - price
+      properties:
+        name:
+          type: string
+          description: Название товара
+          minLength: 1
+          maxLength: 255
+          example: "Футболка хлопковая"
+        weight:
+          type: number
+          description: Вес товара
+          minimum: 0
+          exclusiveMinimum: true
+          example: 1.0
+        unit:
+          type: string
+          description: Единица измерения веса
+          enum:
+            - g
+            - kg
+            - l
+            - piece
+          example: "piece"
+        color:
+          type: string
+          description: Цвет товара
+          maxLength: 50
+          example: "черный"
+        type:
+          type: string
+          description: Тип товара
+          enum:
+            - clothing_headwear
+            - clothing_body
+            - clothing_pants
+            - clothing_shoes
+            - food
+            - furniture
+            - electronics
+            - adult
+            - home_goods
+          example: "clothing_body"
+        price:
+          type: number
+          description: Цена товара
+          minimum: 0
+          example: 1500.50
+        attributes:
+          $ref: '#/components/schemas/ProductAttributes'
+
+    UpdateProductRequest:
+      type: object
+      required:
+        - name
+        - weight
+        - unit
+        - type
+        - price
+      properties:
+        name:
+          type: string
+          description: Название товара
+          minLength: 1
+          maxLength: 255
+          example: "Футболка хлопковая"
+        weight:
+          type: number
+          description: Вес товара
+          minimum: 0
+          exclusiveMinimum: true
+          example: 1.0
+        unit:
+          type: string
+          description: Единица измерения веса
+          enum:
+            - g
+            - kg
+            - l
+            - piece
+          example: "piece"
+        color:
+          type: string
+          description: Цвет товара
+          maxLength: 50
+          example: "черный"
+        type:
+          type: string
+          description: Тип товара
+          enum:
+            - clothing_headwear
+            - clothing_body
+            - clothing_pants
+            - clothing_shoes
+            - food
+            - furniture
+            - electronics
+            - adult
+            - home_goods
+          example: "clothing_body"
+        price:
+          type: number
+          description: Цена товара
+          minimum: 0
+          example: 1500.50
+        attributes:
+          $ref: '#/components/schemas/ProductAttributes'
+
+    # Response Schemas
+    ProductResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Уникальный идентификатор товара
+          example: 1
+        name:
+          type: string
+          example: "Футболка хлопковая"
+        weight:
+          type: number
+          example: 1.0
+        unit:
+          type: string
+          example: "piece"
+        color:
+          type: string
+          example: "черный"
+        type:
+          type: string
+          example: "clothing_body"
+        price:
+          type: number
+          example: 1500.50
+        attributes:
+          $ref: '#/components/schemas/ProductAttributes'
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+
+    ListProductsResponse:
+      type: object
+      properties:
+        products:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductResponse'
+        total:
+          type: integer
+          description: Общее количество товаров в результате
+          example: 150
+        limit:
+          type: integer
+          description: Количество товаров на странице
+          example: 25
+        offset:
+          type: integer
+          description: Смещение для пагинации
+          example: 0
+
+    CreateProductResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: ID созданного товара (временный, до обработки в Kafka)
+          example: 0
+        message:
+          type: string
+          example: "Product creation accepted"
+        status:
+          type: string
+          example: "processing"
+
+    UpdateProductResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Product update accepted"
+        status:
+          type: string
+          example: "processing"
+
+    DeleteProductResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Product deletion accepted"
+        status:
+          type: string
+          example: "processing"
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - healthy
+            - unhealthy
+            - ready
+            - not_ready
+          example: "healthy"
+        message:
+          type: string
+          example: "Service health check"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Тип ошибки
+          example: "validation_error"
+        message:
+          type: string
+          description: Сообщение об ошибке
+          example: "Head circumference is required for headwear"
+
+    # Attribute Schemas
+    ProductAttributes:
+      type: object
+      description: Специфические атрибуты товара в зависимости от типа
+      properties:
+        size:
+          type: string
+          description: Размер (S, M, L, XL, 42, 44 и т.д.)
+          example: "L"
+        head_circumference:
+          type: number
+          description: Обхват головы в см (обязательно для головных уборов)
+          minimum: 0
+          example: 58.5
+        chest_circumference:
+          type: number
+          description: Обхват груди в см (обязательно для верхней одежды)
+          minimum: 0
+          example: 105.5
+        waist_circumference:
+          type: number
+          description: Обхват талии в см (обязательно для штанов)
+          minimum: 0
+          example: 85.0
+        hip_circumference:
+          type: number
+          description: Обхват бедер в см
+          minimum: 0
+          example: 95.0
+        foot_size:
+          type: number
+          description: Размер ноги в см (обязательно для обуви)
+          minimum: 0
+          example: 42.5
+        expiry_date:
+          type: string
+          format: date-time
+          description: Срок годности (обязательно для еды)
+          example: "2024-12-31T23:59:59Z"
+        nutritional_info:
+          type: string
+          description: Пищевая ценность
+          example: "Белки: 10г, Жиры: 5г, Углеводы: 20г"
+        warranty_months:
+          type: integer
+          description: Гарантия в месяцах (обязательно для электроники)
+          minimum: 1
+          example: 24
+        voltage:
+          type: string
+          description: Напряжение
+          example: "220V"
+        dimensions:
+          type: string
+          description: Габариты (ШxВxГ)
+          example: "100x50x200"
+        material:
+          type: string
+          description: Материал
+          example: "дерево, металл"
+
+  responses:
+    RateLimitExceeded:
+      description: Превышен лимит запросов
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "rate_limit_exceeded"
+            message: "Too many requests"
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API Key для аутентификации (если будет добавлена в будущем)
+
+security:
+  - ApiKeyAuth: []  # Заглушка для будущей аутентификации
