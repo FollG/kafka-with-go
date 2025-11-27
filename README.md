@@ -51,12 +51,15 @@ The project can be used as a platform for training in performing work tasks. The
 ### Prerequisites
 
 - **Docker & Docker Compose** - [Get Docker](https://docs.docker.com/get-docker/)
-
+- **Make** - ```sudo apt-get intsall make```
+- **golang** - ```sudo apt-get update && sudo apt-get install golang-1.23 && /usr/lib/go-1.23/bin/go version```
+  
 ### Running project with Docker
-
 ```bash
 git clone https://github.com/FollG/kafka-with-go.git
 cd kafka-with-go
+go mod init github.com/FollG/kafka-with-go
+go mod tidy
 make build
 make docker-up
 ```
