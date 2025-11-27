@@ -5,12 +5,12 @@
 **A practical guide and code examples for building robust event-driven applications with Apache Kafka and the Go programming language.**
 
 [![Go Version](https://img.shields.io/badge/Go-1.23%2B-00ADD8?logo=go)](https://golang.org)
-[![Kafka](https://img.shields.io/badge/Apache%20Kafka-4%2B-231F20?logo=apachekafka)](https://kafka.apache.org)
+[![Kafka](https://img.shields.io/badge/Apache%20Kafka-4%2B-231F20?logo=apachekafka)](https://kafka.apache.org/40/documentation.html)
 [![Postgres](https://img.shields.io/badge/PSQL-16-blue)](https://www.postgresql.org/about/news/postgresql-16-released-2715/)
 [![Prometheus](https://img.shields.io/badge/Promethus-last-red)](https://prometheus.io/docs/introduction/overview/)
 [![Grafana](https://img.shields.io/badge/Grafana-last-green)](https://grafana.com/docs/)
 [![Redis](https://img.shields.io/badge/Redis-7.2-violet)](https://redis.io/docs/latest/)
-[![License](https://img.shields.io/badge/License-Apache2.0-gray.svg)](https://opensource.org/licenses/MIT)
+[![License](https://img.shields.io/badge/License-Apache2.0-gray.svg)](https://opensource.org/license/apache-2-0)
 
 
 </div>
