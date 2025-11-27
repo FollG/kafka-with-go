@@ -1,0 +1,126 @@
+{
+  "id": null,
+  "title": "Product Service Metrics",
+  "tags": ["products", "api", "kafka"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "title": "HTTP Requests",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total[5m]))",
+          "legendFormat": "Requests/sec"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "HTTP Request Duration",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Product Operations",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(products_created_total[5m])",
+          "legendFormat": "Created"
+        },
+        {
+          "expr": "rate(products_updated_total[5m])",
+          "legendFormat": "Updated"
+        },
+        {
+          "expr": "rate(products_deleted_total[5m])",
+          "legendFormat": "Deleted"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Kafka Messages",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(kafka_messages_processed_total[5m])",
+          "legendFormat": "Processed"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Error Rate",
+      "type": "gauge",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+          "legendFormat": "Error Rate %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  }
+}
