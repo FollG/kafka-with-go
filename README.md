@@ -2,8 +2,6 @@
 
 # 🚀 Kafka with Go
 
-**A practical guide and code examples for building robust event-driven applications with Apache Kafka and the Go programming language.**
-
 [![Go Version](https://img.shields.io/badge/Go-1.23%2B-00ADD8?logo=go)](https://golang.org)
 [![Kafka](https://img.shields.io/badge/Apache%20Kafka-4%2B-231F20?logo=apachekafka)](https://kafka.apache.org/40/documentation.html)
 [![Postgres](https://img.shields.io/badge/PSQL-16-blue)](https://www.postgresql.org/about/news/postgresql-16-released-2715/)
